@@ -42,6 +42,8 @@ struct MnfBinParser
     const int kCoordDimByteOffset = kNodeNumByteOffset + kIntByteNum;
     const int kCoordDim3NodeDof = 6;
 
+    const int kUnitsNum = 4;
+
     enum class EigenValuesType
     {
         kEigenValue,
@@ -301,10 +303,13 @@ struct MnfBinParser
     std::vector<Eigen::Vector3d> getNodalInertias()
     {
         int node_num = getNodeNum();
+        // 只记录到对角线上的元素
         std::vector<Eigen::Vector3d> nodal_inertias(node_num);
 
         mnf_file.seekg(byteOffsetToNodalInertias(), std::ios::beg);
-        int entry_num = read_big_endian_value<int>(mnf_file);
+        if ((read_big_endian_value<int>(mnf_file) / 3) != node_num) {
+            throw std::runtime_error("Failed to read nodal inertias from file");
+        }
 
         for (int i = 0; i < node_num; ++i) {
             for (int j = 0; j < 3; ++j) {
@@ -318,6 +323,127 @@ struct MnfBinParser
         }
 
         return nodal_inertias;
+    }
+
+    int byteNumToNodalInertias()
+    {
+        int node_num = getNodeNum();
+        return kIntByteNum + node_num * 3 * (kIntByteNum + kIntByteNum + kIntByteNum + kDoubleByteNum);
+    }
+
+    constexpr int byteNumToMNFDefaultUnits() { return kUnitsNum * 4 * 16; }
+
+    int byteOffsetToElementFaces()
+    {
+        return byteOffsetToNodalInertias() + byteNumToNodalInertias() + byteNumToMNFDefaultUnits();
+    }
+
+    int getFacesNum()
+    {
+        mnf_file.seekg(byteOffsetToElementFaces(), std::ios::beg);
+        mnf_file.seekg(kIntByteNum + kIntByteNum, std::ios::cur);
+        return read_big_endian_value<int>(mnf_file);
+    }
+
+    int getFacesDatasIntNum()
+    {
+        mnf_file.seekg(byteOffsetToElementFaces(), std::ios::beg);
+        mnf_file.seekg(kIntByteNum + kIntByteNum + kIntByteNum, std::ios::cur);
+        return read_big_endian_value<int>(mnf_file);
+    }
+
+    std::vector<std::vector<int>> getElementFaces()
+    {
+        int faces_num = getFacesNum();
+        std::vector<std::vector<int>> element_faces(faces_num);
+
+        mnf_file.seekg(byteOffsetToElementFaces(), std::ios::beg);
+        mnf_file.seekg(kIntByteNum + kIntByteNum + kIntByteNum + kIntByteNum, std::ios::cur);
+        for (int i = 0; i < faces_num; ++i) {
+            int face_node_num = read_big_endian_value<int>(mnf_file);
+            std::vector<int> face_nodes(face_node_num);
+            for (int j = 0; j < face_node_num; ++j) {
+                face_nodes[j] = read_big_endian_value<int>(mnf_file) + 1;
+            }
+            element_faces[i] = face_nodes;
+        }
+
+        if (!mnf_file) {
+            throw std::runtime_error("Failed to read element faces from file");
+        }
+
+        return element_faces;
+    }
+
+    int byteNumToElementFaces()
+    {
+        int faces_num = getFacesNum();
+        int faces_datas_int_num = getFacesDatasIntNum();
+        return 4 * kIntByteNum + faces_datas_int_num * kIntByteNum;
+    }
+
+    int byteOffsetToModeShapeTransformation() { return byteOffsetToElementFaces() + byteNumToElementFaces(); }
+
+    Eigen::MatrixXd getModeShapeTransformation()
+    {
+        int modal_order = getModalOrder();
+
+        mnf_file.seekg(byteOffsetToModeShapeTransformation(), std::ios::beg);
+        if (read_big_endian_value<int>(mnf_file) != modal_order) {
+            throw std::runtime_error("Failed to read mode shape transformation from file");
+        }
+        int modal_order_temp = 0;
+        for (int i = 0; i < modal_order; ++i) {
+            modal_order_temp = read_big_endian_value<int>(mnf_file);
+        }
+        if (modal_order_temp != modal_order) {
+            throw std::runtime_error("Failed to read mode shape transformation from file");
+        }
+
+        Eigen::MatrixXd mode_shape_transformation(modal_order, modal_order);
+
+        for (int i = 0; i < modal_order; ++i) {
+            for (int j = 0; j < modal_order; ++j) {
+                mode_shape_transformation(i, j) = read_big_endian_value<double>(mnf_file);
+            }
+        }
+
+        if (!mnf_file) {
+            throw std::runtime_error("Failed to read mode shape transformation from file");
+        }
+
+        return mode_shape_transformation;
+    }
+
+    int byteNumToModeShapeTransformation()
+    {
+        int modal_order = getModalOrder();
+        return kIntByteNum + modal_order * kIntByteNum + modal_order * modal_order * kDoubleByteNum;
+    }
+
+    int byteOffsetToInterfaceNodes()
+    {
+        return byteOffsetToModeShapeTransformation() + byteNumToModeShapeTransformation();
+    }
+
+    int getInterfaceNodesNum()
+    {
+        mnf_file.seekg(byteOffsetToInterfaceNodes(), std::ios::beg);
+        return read_big_endian_value<int>(mnf_file);
+    }
+
+    std::vector<int> getInterfaceNodes()
+    {
+        int interface_nodes_num = getInterfaceNodesNum();
+        std::vector<int> interface_nodes(interface_nodes_num);
+
+        mnf_file.seekg(byteOffsetToInterfaceNodes(), std::ios::beg);
+        mnf_file.seekg(kIntByteNum, std::ios::cur);
+        for (int i = 0; i < interface_nodes_num; ++i) {
+            interface_nodes[i] = read_big_endian_value<int>(mnf_file) + 1;
+        }
+
+        return interface_nodes;
     }
 };
 } // namespace MnfParser

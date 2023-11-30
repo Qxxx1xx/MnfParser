@@ -121,10 +121,41 @@ TEST_F(MnfBinParserTest, getNodalInertias)
     EXPECT_NEAR(nodal_inertias[0](0), 0.0000000231, kTolerance);
     EXPECT_NEAR(nodal_inertias[2](0), 0.0000000461, kTolerance);
 }
-// main 函数，设置并运行所有测试
-int
-main(int argc, char** argv)
+
+// MnfBinParser::getElementFaces()测试
+TEST_F(MnfBinParserTest, getElementFaces)
 {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    int faces_num = mnf_bin_parser.getFacesNum();
+    EXPECT_EQ(faces_num, 100);
+    int faces_datas_int_num = mnf_bin_parser.getFacesDatasIntNum();
+    EXPECT_EQ(faces_datas_int_num, 300);
+    auto element_faces = mnf_bin_parser.getElementFaces();
+    EXPECT_EQ(element_faces[0][0], 1);
+    EXPECT_EQ(element_faces[0][1], 3);
+    EXPECT_EQ(element_faces.back()[0], 101);
+    EXPECT_EQ(element_faces.back()[1], 2);
 }
+
+// MnfBinParser::getModeShapeTransformation()测试
+TEST_F(MnfBinParserTest, getModeShapeTransformation)
+{
+    Eigen::MatrixXd mode_shape_transformation = mnf_bin_parser.getModeShapeTransformation();
+    int modal_order = mnf_bin_parser.getModalOrder();
+    // 判断是否是modal_order * modal_order的单位矩阵
+    bool is_identity_matrix = mode_shape_transformation.isIdentity();
+    EXPECT_EQ(is_identity_matrix, true);
+    EXPECT_EQ(mode_shape_transformation.rows(), modal_order);
+}
+
+// MnfBinParser::getInterfaceNodes()测试
+TEST_F(MnfBinParserTest, getInterfaceNodes)
+{
+    int interface_nodes_num = mnf_bin_parser.getInterfaceNodesNum();
+    EXPECT_EQ(interface_nodes_num, 2);
+    auto interface_nodes = mnf_bin_parser.getInterfaceNodes();
+    EXPECT_EQ(interface_nodes[0], 1);
+    EXPECT_EQ(interface_nodes[1], 2);
+}
+
+// mnf_bin_parser.mnf_file.seekg(mnf_bin_parser.byteOffsetToElementFaces(), std::ios::beg);
+// std::cout << MnfParser::read_big_endian_value<int>(mnf_bin_parser.mnf_file) << std::endl;
