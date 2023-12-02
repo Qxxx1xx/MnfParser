@@ -127,8 +127,8 @@ TEST_F(MnfBinParserTest, getElementFaces)
 {
     int faces_num = mnf_bin_parser.getFacesNum();
     EXPECT_EQ(faces_num, 100);
-    int faces_datas_int_num = mnf_bin_parser.getFacesDatasIntNum();
-    EXPECT_EQ(faces_datas_int_num, 300);
+    int faces_data_int_num = mnf_bin_parser.getFacesDataIntNum();
+    EXPECT_EQ(faces_data_int_num, 300);
     auto element_faces = mnf_bin_parser.getElementFaces();
     EXPECT_EQ(element_faces[0][0], 1);
     EXPECT_EQ(element_faces[0][1], 3);

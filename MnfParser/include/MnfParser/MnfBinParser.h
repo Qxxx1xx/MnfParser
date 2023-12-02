@@ -345,7 +345,7 @@ struct MnfBinParser
         return read_big_endian_value<int>(mnf_file);
     }
 
-    int getFacesDatasIntNum()
+    int getFacesDataIntNum()
     {
         mnf_file.seekg(byteOffsetToElementFaces(), std::ios::beg);
         mnf_file.seekg(kIntByteNum + kIntByteNum + kIntByteNum, std::ios::cur);
@@ -378,8 +378,8 @@ struct MnfBinParser
     int byteNumToElementFaces()
     {
         int faces_num = getFacesNum();
-        int faces_datas_int_num = getFacesDatasIntNum();
-        return 4 * kIntByteNum + faces_datas_int_num * kIntByteNum;
+        int faces_data_int_num = getFacesDataIntNum();
+        return 4 * kIntByteNum + faces_data_int_num * kIntByteNum;
     }
 
     int byteOffsetToModeShapeTransformation() { return byteOffsetToElementFaces() + byteNumToElementFaces(); }
