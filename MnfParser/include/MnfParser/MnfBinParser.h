@@ -3,7 +3,9 @@
 #include <Eigen/Dense>
 #include <bit>
 #include <fstream>
+#include <iostream>
 #include <string>
+#include <tuple>
 
 namespace MnfParser {
 template<typename T>
@@ -37,6 +39,8 @@ struct MnfBinParser
     const int kVersionByteOffset = 0x3;
     const int kSupportMnfVersion = 6;
     const int kVersionMultiplier = 10;
+    // Content Summary
+    const int kHasNodalInertiasByteOffset = 0xa10LL + 4 - 4 * 94;
     // 节点坐标相关
     const int kNodeNumByteOffset = 0xa10 + 4;
     const int kCoordDimByteOffset = kNodeNumByteOffset + kIntByteNum;
@@ -72,6 +76,14 @@ struct MnfBinParser
                                  ") - This solver only supports MNF Version " + std::to_string(kSupportMnfVersion);
             throw std::runtime_error(errMsg);
         }
+    }
+
+    // 是否含有Nodal_inertias
+    bool hasNodalInertias()
+    {
+        mnf_file.seekg(kHasNodalInertiasByteOffset, std::ios::beg);
+        int value_has_nodal_inertias = read_big_endian_value<int>(mnf_file);
+        return value_has_nodal_inertias == 1;
     }
 
     int getNodeNum()
@@ -300,35 +312,61 @@ struct MnfBinParser
 
     int byteOffsetToNodalInertias() { return byteOffsetToNodalMasses() + byteNumToNodalMasses(); }
 
-    std::vector<Eigen::Vector3d> getNodalInertias()
+    std::tuple<std::vector<int>, std::vector<Eigen::Vector3d>> getNodesAndNodalInertias()
     {
-        int node_num = getNodeNum();
-        // 只记录到对角线上的元素
-        std::vector<Eigen::Vector3d> nodal_inertias(node_num);
-
-        mnf_file.seekg(byteOffsetToNodalInertias(), std::ios::beg);
-        if ((read_big_endian_value<int>(mnf_file) / 3) != node_num) {
-            throw std::runtime_error("Failed to read nodal inertias from file");
+        if (!hasNodalInertias()) {
+            return { {}, {} };
         }
 
-        for (int i = 0; i < node_num; ++i) {
-            for (int j = 0; j < 3; ++j) {
-                mnf_file.seekg(kIntByteNum + kIntByteNum + kIntByteNum, std::ios::cur);
+        mnf_file.seekg(byteOffsetToNodalInertias(), std::ios::beg);
+        int nodal_inertias_num = read_big_endian_value<int>(mnf_file);
+        // 得到nodal_inertias_num除以3的余数
+        int nodal_inertias_num_mod_3 = nodal_inertias_num % 3;
+        // 如果余数不为0，说明nodal_inertias_num不是3的倍数，抛出异常
+        if (nodal_inertias_num_mod_3 != 0) {
+            throw std::runtime_error("Failed to read nodal inertias from file");
+        }
+        // 得到nodal_inertias_num除以3的商
+        int nodal_inertias_num_div_3 = nodal_inertias_num / 3;
+        std::vector<int> nodes(nodal_inertias_num_div_3);
+        // 只记录到对角线上的元素
+        std::vector<Eigen::Vector3d> nodal_inertias(nodal_inertias_num_div_3);
+        for (int i = 0; i < nodal_inertias_num_div_3; ++i) {
+            // nodes.push_back(read_big_endian_value<int>(mnf_file));
+            Eigen::Vector3i node;
+            for (int j = 0; j < 3; j++) {
+                node(j) = read_big_endian_value<int>(mnf_file);
+                int row_idx = read_big_endian_value<int>(mnf_file);
+                int col_idx = read_big_endian_value<int>(mnf_file);
+                // row_idx和col_idx相等，范围在[4,6]之间
+                if (row_idx != col_idx || row_idx < 4 || row_idx > 6) {
+                    throw std::runtime_error("Failed to read nodal inertias from file");
+                }
                 nodal_inertias[i](j) = read_big_endian_value<double>(mnf_file);
             }
+            // 如果node的三个元素不相等，抛出异常
+            if (node(0) != node(1) || node(0) != node(2)) {
+                throw std::runtime_error("Failed to read nodal inertias from file");
+            }
+            nodes[i] = node(0);
         }
 
         if (!mnf_file) {
             throw std::runtime_error("Failed to read nodal inertias from file");
         }
 
-        return nodal_inertias;
+        return { nodes, nodal_inertias };
     }
 
     int byteNumToNodalInertias()
     {
-        int node_num = getNodeNum();
-        return kIntByteNum + node_num * 3 * (kIntByteNum + kIntByteNum + kIntByteNum + kDoubleByteNum);
+        if (!hasNodalInertias()) {
+            return 0;
+        }
+
+        mnf_file.seekg(byteOffsetToNodalInertias(), std::ios::beg);
+        int nodal_inertias_num = read_big_endian_value<int>(mnf_file);
+        return kIntByteNum + nodal_inertias_num * (kIntByteNum + kIntByteNum + kIntByteNum + kDoubleByteNum);
     }
 
     constexpr int byteNumToMNFDefaultUnits() { return kUnitsNum * 4 * 16; }

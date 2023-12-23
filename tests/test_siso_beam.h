@@ -21,13 +21,19 @@ struct MnfBinParserTest : public ::testing::Test
 
 TEST_F(MnfBinParserTest, Test_MnfParserTESTS_DATA_DIR)
 {
-    EXPECT_EQ(std::string(MnfParserTESTS_DATA_DIR), "C:/Users/Qxxxx/Desktop/Work/code/MnfParser/tests/data/");
+    EXPECT_EQ(std::string(MnfParserTESTS_DATA_DIR), "E:/Work/code/MnfParser/tests/data/");
 }
 
 // MnfBinParser构造函数测试
 TEST_F(MnfBinParserTest, MnfBinParserConstructor)
 {
     EXPECT_EQ(mnf_bin_parser.mnf_file.is_open(), true);
+}
+
+// MnfBinParser::hasNodalInertias()测试
+TEST_F(MnfBinParserTest, hasNodalInertias)
+{
+    EXPECT_EQ(mnf_bin_parser.hasNodalInertias(), true);
 }
 
 // MnfBinParser::getNodeNum()测试
@@ -114,10 +120,12 @@ TEST_F(MnfBinParserTest, getNodalMasses)
     EXPECT_NEAR(nodal_masses(100), 2.766700e-03, kTolerance);
 }
 
-// MnfBinParser::getNodalInertias()测试
-TEST_F(MnfBinParserTest, getNodalInertias)
+// MnfBinParser::getNodesAndNodalInertias()测试
+TEST_F(MnfBinParserTest, getNodesAndNodalInertias)
 {
-    std::vector<Eigen::Vector3d> nodal_inertias = mnf_bin_parser.getNodalInertias();
+    auto [nodes, nodal_inertias] = mnf_bin_parser.getNodesAndNodalInertias();
+    EXPECT_EQ(nodes.size(), 101);
+    EXPECT_EQ(nodal_inertias.size(), 101);
     EXPECT_NEAR(nodal_inertias[0](0), 0.0000000231, kTolerance);
     EXPECT_NEAR(nodal_inertias[2](0), 0.0000000461, kTolerance);
 }
