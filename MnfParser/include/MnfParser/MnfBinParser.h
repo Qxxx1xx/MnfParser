@@ -1,29 +1,46 @@
 ﻿#pragma once
 
 #include <Eigen/Dense>
-#include <bit>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 
 namespace MnfParser {
+// 判断是否是小端字节序
+class EndianChecker
+{
+  public:
+    static bool is_little_endian()
+    {
+        static bool isLittleEndian = []() {
+            uint16_t num = 1;
+            return *reinterpret_cast<uint8_t*>(&num) == 1;
+        }();
+        return isLittleEndian;
+    }
+};
+
 template<typename T>
 T
 read_big_endian_value(std::istream& is)
 {
     // 声明一个类型为 T 的变量 value，用于存储从文件中读取的数据
     T value;
-    // 将 value 的地址转换为 char* 类型，read函数需要一个 char* 来读取数据
+    // 将 value 的地址转换为 char* 类型，read 函数需要一个 char* 来读取数据
     char* buffer = reinterpret_cast<char*>(&value);
     // 从文件中读取 sizeof(T) 个字节，存储到 value 的地址中
     if (!is.read(buffer, sizeof(T))) {
         throw std::runtime_error("read_big_endian_value failed");
     }
-    // 如果原生字节序是小端的，这行代码将反转从文件读取的字节
-    if constexpr (std::endian::native == std::endian::little) {
+
+    // 如果原生字节序是小端的，并且文件是大端字节序，我们需要反转字节
+    if (EndianChecker::is_little_endian()) {
         std::reverse(buffer, buffer + sizeof(T));
     }
+
     return value;
 }
 
